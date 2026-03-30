@@ -45,15 +45,15 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
       
-      - name: Build Release APK
+      - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace --info 2>&1 | tee build-output.log
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build-output.log
           if [ $? -ne 0 ]; then
             echo "=== BUILD FAILED ==="
-            echo "Last 500 lines of build output:"
-            tail -n 500 build-output.log
+            echo "Last 100 lines of build output:"
+            tail -n 100 build-output.log
             exit 1
           fi
           echo "=== Build completed successfully ==="
