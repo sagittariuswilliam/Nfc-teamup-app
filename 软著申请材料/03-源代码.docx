@@ -1,0 +1,657 @@
+NFC 碰一碰组队软件 V1.0 - 源代码（前 30 页）
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：1
+===========================================
+
+/**
+ * NFC TeamUp 用户状态管理
+ * © 2026 公司全称。All rights reserved.
+ */
+
+import { create } from 'zustand';
+
+// API 基础 URL - 根据环境配置
+const API_BASE_URL = __DEV__ 
+  ? 'http://localhost:3000/api/v1' 
+  : 'https://api.nfcteamup.com/api/v1';
+
+export interface User {
+  id: string;
+  username: string;
+  nickname?: string;
+  avatar?: string;
+  phone?: string;
+  email?: string;
+  token?: string;
+}
+
+interface UserState {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, password: string, phone?: string) => Promise<boolean>;
+  logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
+  clearError: () => void;
+}
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：2
+===========================================
+
+export const useUserStore = create<UserState>((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  error: null,
+
+  login: async (username, password) => {
+    set({ isLoading: true, error: null });
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || '登录失败');
+      }
+      
+      const user: User = {
+        id: data.user.id,
+        username: data.user.username,
+        nickname: data.user.nickname,
+        avatar: data.user.avatar,
+        phone: data.user.phone,
+        email: data.user.email,
+        token: data.token,
+      };
+      
+      set({ user, isAuthenticated: true, isLoading: false });
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '登录失败';
+      set({ error: errorMessage, isLoading: false });
+      return false;
+    }
+  },
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：3
+===========================================
+
+  register: async (username, password, phone) => {
+    set({ isLoading: true, error: null });
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/user/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, phone }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || '注册失败');
+      }
+      
+      const user: User = {
+        id: data.user.id,
+        username: data.user.username,
+        nickname: data.user.nickname,
+        phone: data.user.phone,
+        avatar: data.user.avatar,
+        email: data.user.email,
+        token: data.token,
+      };
+      
+      set({ user, isAuthenticated: true, isLoading: false });
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '注册失败';
+      set({ error: errorMessage, isLoading: false });
+      return false;
+    }
+  },
+
+  logout: () => {
+    set({ user: null, isAuthenticated: false, error: null });
+  },
+
+  updateUser: (updates) => {
+    const { user } = get();
+    if (user) {
+      set({ user: { ...user, ...updates } });
+    }
+  },
+
+  clearError: () => {
+    set({ error: null });
+  },
+}));
+
+export default useUserStore;
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：4
+===========================================
+
+/**
+ * NFC TeamUp 队伍状态管理
+ * © 2026 公司全称。All rights reserved.
+ */
+
+import { create } from 'zustand';
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  avatar?: string;
+  role: 'captain' | 'member';
+  joinedAt: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  captainId: string;
+  members: TeamMember[];
+  maxMembers: number;
+  createdAt: string;
+  expiresAt: string;
+  isActive: boolean;
+}
+
+interface TeamState {
+  currentTeam: Team | null;
+  isJoined: boolean;
+  createTeam: (name: string, maxMembers: number, days: number) => void;
+  joinTeam: (team: Team) => void;
+  leaveTeam: () => void;
+  updateTeam: (updates: Partial<Team>) => void;
+  addMember: (member: TeamMember) => void;
+  removeMember: (memberId: string) => void;
+}
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：5
+===========================================
+
+export const useTeamStore = create<TeamState>((set, get) => ({
+  currentTeam: null,
+  isJoined: false,
+
+  createTeam: (name, maxMembers, days) => {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    
+    const currentUserId = 'user_001';
+    
+    const newTeam: Team = {
+      id: `team_${Date.now()}`,
+      name,
+      captainId: currentUserId,
+      members: [
+        {
+          id: currentUserId,
+          name: '我',
+          role: 'captain',
+          joinedAt: now.toISOString(),
+        },
+      ],
+      maxMembers,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      isActive: true,
+    };
+
+    set({ currentTeam: newTeam, isJoined: true });
+  },
+
+  joinTeam: (team) => {
+    set({ currentTeam: team, isJoined: true });
+  },
+
+  leaveTeam: () => {
+    set({ currentTeam: null, isJoined: false });
+  },
+
+  updateTeam: (updates) => {
+    const { currentTeam } = get();
+    if (currentTeam) {
+      set({ currentTeam: { ...currentTeam, ...updates } });
+    }
+  },
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：6
+===========================================
+
+  addMember: (member) => {
+    const { currentTeam } = get();
+    if (currentTeam) {
+      set({
+        currentTeam: {
+          ...currentTeam,
+          members: [...currentTeam.members, member],
+        },
+      });
+    }
+  },
+
+  removeMember: (memberId) => {
+    const { currentTeam } = get();
+    if (currentTeam) {
+      set({
+        currentTeam: {
+          ...currentTeam,
+          members: currentTeam.members.filter(m => m.id !== memberId),
+        },
+      });
+    }
+  },
+}));
+
+export default useTeamStore;
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：7
+===========================================
+
+/**
+ * NFC TeamUp 主题配置
+ * © 2026 公司全称。All rights reserved.
+ */
+
+export const colors = {
+  // 主色 - 科技蓝
+  primary: '#1890FF',
+  primaryLight: '#40A9FF',
+  primaryDark: '#096DD9',
+  
+  // 辅助色
+  success: '#52C41A',
+  successLight: '#95DE64',
+  warning: '#FAAD14',
+  warningLight: '#FFC53D',
+  error: '#F5222D',
+  errorLight: '#FFA39E',
+  
+  // 中性色
+  text: {
+    primary: '#333333',
+    secondary: '#666666',
+    tertiary: '#999999',
+    disabled: '#BBBBBB',
+  },
+  
+  // 背景色
+  background: {
+    primary: '#FFFFFF',
+    secondary: '#F5F5F5',
+    tertiary: '#F0F2F5',
+    gradient: ['#1890FF', '#096DD9'],
+  },
+  
+  // 边框色
+  border: {
+    light: '#E8E8E8',
+    medium: '#D9D9D9',
+  },
+  
+  // 阴影
+  shadow: {
+    light: 'rgba(0, 0, 0, 0.08)',
+    medium: 'rgba(0, 0, 0, 0.12)',
+  },
+};
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：8
+===========================================
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 40,
+};
+
+export const borderRadius = {
+  button: 8,
+  card: 12,
+  input: 8,
+  avatar: 20,
+  modal: 16,
+};
+
+export const fontSize = {
+  xs: 11,
+  sm: 12,
+  md: 14,
+  lg: 15,
+  xl: 16,
+  xxl: 18,
+  title: 20,
+  heading: 22,
+  large: 24,
+};
+
+export const fontWeight = {
+  regular: '400',
+  medium: '500',
+  semibold: '600',
+  bold: '700',
+};
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：9
+===========================================
+
+export const shadows = {
+  light: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  medium: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  heavy: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 32,
+    elevation: 8,
+  },
+};
+
+export const theme = {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  fontWeight,
+  shadows,
+};
+
+export type Theme = typeof theme;
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：10
+===========================================
+
+/**
+ * NFC TeamUp 应用导航配置
+ * © 2026 公司全称。All rights reserved.
+ */
+
+import React, { useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors, fontSize } from '../theme';
+
+import SplashScreen from '../screens/SplashScreen';
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
+import HomeScreen from '../screens/HomeScreen';
+import TeamSpace from '../screens/TeamSpace';
+import ProfileScreen from '../screens/ProfileScreen';
+import MapTab from '../screens/MapTab';
+import { useUserStore } from '../store/userStore';
+import { useTeamStore } from '../store/teamStore';
+
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：11
+===========================================
+
+const MainTabNavigator = ({ navigation }: { navigation: any }) => {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.text.tertiary,
+        tabBarStyle: {
+          backgroundColor: colors.background.primary,
+          borderTopColor: colors.border.light,
+          paddingTop: 8,
+          paddingBottom: 20,
+        },
+        headerShown: false,
+      }}
+    >
+      <Tab.Screen
+        name="HomeTab"
+        options={{
+          tabBarLabel: '首页',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>🏠</Text>
+          ),
+        }}
+      >
+        {(props) => (
+          <HomeScreen
+            {...props}
+            onCreateTeam={() => navigation.navigate('TeamSpace')}
+            onJoinTeam={() => navigation.navigate('TeamSpace')}
+            onNavigateToMap={() => navigation.navigate('MapTab')}
+            onNavigateToProfile={() => navigation.navigate('ProfileTab')}
+          />
+        )}
+      </Tab.Screen>
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：12
+===========================================
+
+      <Tab.Screen
+        name="MapTab"
+        component={MapTab}
+        options={{
+          tabBarLabel: '地图',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>🗺️</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ProfileTab"
+        options={{
+          tabBarLabel: '我的',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>👤</Text>
+          ),
+        }}
+      >
+        {(props) => (
+          <ProfileScreen
+            {...props}
+            onNavigateToLogin={() => navigation.navigate('Login')}
+            onNavigateToHome={() => navigation.navigate('HomeTab')}
+            onNavigateToMap={() => navigation.navigate('MapTab')}
+          />
+        )}
+      </Tab.Screen>
+    </Tab.Navigator>
+  );
+};
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：13
+===========================================
+
+const TeamSpaceNavigator = ({ navigation }: { navigation: any }) => {
+  const leaveTeam = useTeamStore(state => state.leaveTeam);
+  
+  return (
+    <TeamSpace
+      onNavigateToMap={() => {}}
+      onNavigateToProfile={() => navigation.navigate('ProfileTab')}
+      onLeaveTeam={() => {
+        leaveTeam();
+        navigation.goBack();
+      }}
+    />
+  );
+};
+
+const TeamTabNavigator = ({ navigation }: { navigation: any }) => {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.text.tertiary,
+        tabBarStyle: {
+          backgroundColor: colors.background.primary,
+          borderTopColor: colors.border.light,
+          paddingTop: 8,
+          paddingBottom: 20,
+        },
+        headerShown: false,
+      }}
+    >
+      <Tab.Screen
+        name="TeamSpaceTab"
+        options={{
+          tabBarLabel: '队伍',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>🏠</Text>
+          ),
+        }}
+      >
+        {(props) => <TeamSpaceNavigator {...props} navigation={navigation} />}
+      </Tab.Screen>
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：14
+===========================================
+
+      <Tab.Screen
+        name="GlobalMapTab"
+        component={MapTab}
+        options={{
+          tabBarLabel: '地图',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>🗺️</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="GlobalProfileTab"
+        options={{
+          tabBarLabel: '我的',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>👤</Text>
+          ),
+        }}
+      >
+        {(props) => (
+          <ProfileScreen
+            {...props}
+            onNavigateToLogin={() => navigation.navigate('Login')}
+            onNavigateToHome={() => navigation.navigate('HomeTab')}
+            onNavigateToMap={() => navigation.navigate('GlobalMapTab')}
+          />
+        )}
+      </Tab.Screen>
+    </Tab.Navigator>
+  );
+};
+
+===========================================
+页眉：NFC 碰一碰组队软件 V1.0
+页码：15
+===========================================
+
+const AppNavigator = () => {
+  const [showSplash, setShowSplash] = useState(true);
+  const isAuthenticated = useUserStore(state => state.isAuthenticated);
+  const isJoined = useTeamStore(state => state.isJoined);
+
+  if (showSplash) {
+    return <SplashScreen onReady={() => setShowSplash(false)} />;
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        {!isAuthenticated ? (
+          <>
+            <Stack.Screen name="Login">
+              {(props) => (
+                <LoginScreen
+                  {...props}
+                  onLoginSuccess={() => {}}
+                  onNavigateToRegister={() => {}}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Register">
+              {(props) => (
+                <RegisterScreen
+                  {...props}
+                  onRegisterSuccess={() => {}}
+                  onNavigateToLogin={() => {}}
+                />
+              )}
+            </Stack.Screen>
+          </>
+        ) : (
+          <>
+            {!isJoined ? (
+              <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            ) : (
+              <Stack.Screen name="TeamTabs" component={TeamTabNavigator} />
+            )}
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+export default AppNavigator;
+
+===========================================
+（此处省略第 16-30 页，实际提交时需完整 60 页）
+===========================================
