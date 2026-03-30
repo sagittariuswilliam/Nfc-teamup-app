@@ -56,13 +56,19 @@ jobs:
             tail -n 500 build-output.log
             exit 1
           fi
-      
+          echo "=== Build completed successfully ==="
+          echo "Looking for APK files..."
+          find . -name "*.apk" -type f
+          
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: nfc-teamup-app-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
+          if-no-files-found: warn
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
