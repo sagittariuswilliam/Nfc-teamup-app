@@ -25,6 +25,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       
+      - name: Fix react-native-reanimated version
+        run: |
+          # Fix reanimated version for RN 0.73.6 compatibility
+          sed -i 's/"react-native-reanimated": "[^"]*"/"react-native-reanimated": "~3.6.0"/' package.json
+          echo "Fixed package.json:"
+          grep reanimated package.json
+      
       - name: Install Dependencies
         run: |
           cd android
