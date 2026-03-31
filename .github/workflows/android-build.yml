@@ -55,54 +55,48 @@ jobs:
 
       - name: Build Debug APK
         id: build
-        continue-on-error: true
         run: |
           cd android
           echo "=== Starting Gradle Build ==="
-          echo "Current directory: $(pwd)"
           
-          echo "=== Running assembleDebug ==="
           ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build-output.log
           BUILD_EXIT_CODE=$?
           
-          echo "=== Build Exit Code: $BUILD_EXIT_CODE ==="
           echo "build_exit_code=$BUILD_EXIT_CODE" >> $GITHUB_OUTPUT
           
-          echo "=== Full build output (last 300 lines) ==="
-          tail -n 300 build-output.log
-          
-          echo "=== Files in outputs directory ==="
-          ls -laR app/build/outputs 2>/dev/null || echo "outputs directory missing"
-          
-          APK_PATH=$(find . -name "*debug*.apk" -type f 2>/dev/null | head -1)
-          if [ -n "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
-            echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "❌ Build failed with exit code $BUILD_EXIT_CODE"
+            tail -n 200 build-output.log
+            exit 1
           fi
+          
+          echo "✅ Build succeeded!"
+          
+          # Find APK
+          APK_PATH=$(find app/build/outputs -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No APK found in outputs directory"
+            find app/build/outputs -type f 2>/dev/null || echo "outputs directory empty or missing"
+            exit 1
+          fi
+          
+          echo "Found APK: $APK_PATH"
+          # Use GITHUB_OUTPUT for output
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_basename=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
+          
+          # Show APK info
+          ls -lh "$APK_PATH"
       
-      - name: Upload Build Logs (if failed)
-        if: steps.buld.outputs.build_exit_code != '0'
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: android/build-output.log
-          retention-days: 7
-      
-      - name: Upload APK (if success)
-        if: steps.build.outputs.build_exit_code == '0'
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: nfc-teamup-app-debug
           path: ${{ steps.build.outputs.apk_path }}
           retention-days: 30
-          if-no-files-found: error
       
-      - name: Report Build Status
+      - name: Build Summary
         run: |
-          if [ "${{ steps.build.outputs.build_exit_code }}" != "0" ]; then
-            echo "❏ BUILD FAILED"
-            echo "Check the 'build-logs' artifact for detailed logs"
-            exit 1
-          else
-            echo "❅ BUILD SUCCESS"
-          fi
+          echo "✅ BUILD SUCCESS!"
+          echo "APK: ${{ steps.build.outputs.apk_basename }}"
+          echo "Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
