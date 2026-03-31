@@ -46,6 +46,7 @@ jobs:
             --assets-dest android/app/src/main/res
       
       - name: Build Debug APK
+        id: build
         run: |
           cd android
           chmod +x gradlew
@@ -59,16 +60,17 @@ jobs:
           echo "=== Build completed successfully ==="
           echo "Looking for APK files..."
           find . -name "*.apk" -type f
+          # Set output for APK path
+          APK_PATH=$(find . -name "*debug*.apk" -type f | head -1)
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: nfc-teamup-app-release
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/apk/debug/*.apk
+          name: nfc-teamup-app-debug
+          path: ${{ steps.build.outputs.apk_path }}
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
