@@ -9,29 +9,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-      
+
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      
+
       - name: Fix react-native-reanimated version
         run: |
           # Fix reanimated version for RN 0.73.6 compatibility
           sed -i 's/"react-native-reanimated": "[^"]*"/"react-native-reanimated": "~3.6.0"/' package.json
           echo "Fixed package.json:"
           grep reanimated package.json
-      
+
       - name: Install Dependencies
         run: |
           cd android
@@ -40,7 +40,7 @@ jobs:
           ./gradlew --version
           cd ..
           npm install --legacy-peer-deps
-      
+
       - name: Create Assets Directory and Bundle JS
         run: |
           mkdir -p android/app/src/main/assets
@@ -52,50 +52,57 @@ jobs:
             --assets-dest android/app/src/main/res
           echo "JS Bundle created"
           ls -la android/app/src/main/assets/
-      
+
       - name: Build Debug APK
         id: build
+        continue-on-error: true
         run: |
           cd android
           echo "=== Starting Gradle Build ==="
           echo "Current directory: $(pwd)"
-          echo "Files in android/app/build/outputs before build:"
-          ls -laR app/build/outputs 2>/dev/null || echo "outputs directory does not exist yet"
           
           echo "=== Running assembleDebug ==="
-          ./gradlew assembleDebug --no-daemon --info 2>&1 | tee build-output.log
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build-output.log
           BUILD_EXIT_CODE=$?
           
           echo "=== Build Exit Code: $BUILD_EXIT_CODE ==="
+          echo "build_exit_code=$BUILD_EXIT_CODE" >> $GITHUB_OUTPUT
           
-          if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            echo "=== BUILD FAILED ==="
-            echo "Last 150 lines of build output:"
-            tail -n 150 build-output.log
-            exit 1
+          echo "=== Full build output (last 300 lines) ==="
+          tail -n 300 build-output.log
+          
+          echo "=== Files in outputs directory ==="
+          ls -laR app/build/outputs 2>/dev/null || echo "outputs directory missing"
+          
+          APK_PATH=$(find . -name "*debug*.apk" -type f 2>/dev/null | head -1)
+          if [ -n "$APK_PATH" ]; then
+            echo "Found APK: $APK_PATH"
+            echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
           fi
-          
-          echo "=== Build completed, searching for APK ==="
-          echo "Files in android/app/build/outputs:"
-          ls -laR app/build/outputs 2>/dev/null || echo "outputs directory still missing"
-          
-          echo "All APK files:"
-          find . -name "*.apk" -type f
-          
-          APK_PATH=$(find . -name "*debug*.apk" -type f | head -1)
-          if [ -z "$APK_PATH" ]; then
-            echo "ERROR: No debug APK found!"
-            exit 1
-          fi
-          
-          echo "Found APK: $APK_PATH"
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-          echo "apk_name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
       
-      - name: Upload APK
+      - name: Upload Build Logs (if failed)
+        if: steps.buld.outputs.build_exit_code != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: android/build-output.log
+          retention-days: 7
+      
+      - name: Upload APK (if success)
+        if: steps.build.outputs.build_exit_code == '0'
         uses: actions/upload-artifact@v4
         with:
           name: nfc-teamup-app-debug
           path: ${{ steps.build.outputs.apk_path }}
           retention-days: 30
           if-no-files-found: error
+      
+      - name: Report Build Status
+        run: |
+          if [ "${{ steps.build.outputs.build_exit_code }}" != "0" ]; then
+            echo "❏ BUILD FAILED"
+            echo "Check the 'build-logs' artifact for detailed logs"
+            exit 1
+          else
+            echo "❅ BUILD SUCCESS"
+          fi
