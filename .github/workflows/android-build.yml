@@ -19,51 +19,72 @@ jobs:
         with:
           node-version: '18'
       
-      - name: Setup Java JDK
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
       
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v3
-      
       - name: Install Dependencies
         run: |
+          cd android
+          chmod +x gradlew
+          # Download gradle wrapper first
+          ./gradlew --version
+          cd ..
           npm install --legacy-peer-deps
       
-      - name: Create Assets Directory
+      - name: Create Assets Directory and Bundle JS
         run: |
           mkdir -p android/app/src/main/assets
-      
-      - name: Bundle JavaScript
-        run: |
           npx react-native bundle \
             --platform android \
             --dev false \
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
+          echo "JS Bundle created"
+          ls -la android/app/src/main/assets/
       
       - name: Build Debug APK
         id: build
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build-output.log
-          if [ $? -ne 0 ]; then
+          echo "=== Starting Gradle Build ==="
+          echo "Current directory: $(pwd)"
+          echo "Files in android/app/build/outputs before build:"
+          ls -laR app/build/outputs 2>/dev/null || echo "outputs directory does not exist yet"
+          
+          echo "=== Running assembleDebug ==="
+          ./gradlew assembleDebug --no-daemon --info 2>&1 | tee build-output.log
+          BUILD_EXIT_CODE=$?
+          
+          echo "=== Build Exit Code: $BUILD_EXIT_CODE ==="
+          
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
             echo "=== BUILD FAILED ==="
-            echo "Last 100 lines of build output:"
-            tail -n 100 build-output.log
+            echo "Last 150 lines of build output:"
+            tail -n 150 build-output.log
             exit 1
           fi
-          echo "=== Build completed successfully ==="
-          echo "Looking for APK files..."
-          find . -name "*.apk" -type f
-          # Set output for APK path
-          APK_PATH=$(find . -name "*debug*.apk" -type f | head -1)
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
           
+          echo "=== Build completed, searching for APK ==="
+          echo "Files in android/app/build/outputs:"
+          ls -laR app/build/outputs 2>/dev/null || echo "outputs directory still missing"
+          
+          echo "All APK files:"
+          find . -name "*.apk" -type f
+          
+          APK_PATH=$(find . -name "*debug*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No debug APK found!"
+            exit 1
+          fi
+          
+          echo "Found APK: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
+      
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -71,9 +92,3 @@ jobs:
           path: ${{ steps.build.outputs.apk_path }}
           retention-days: 30
           if-no-files-found: error
-      
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: android/app/build/outputs/apk/release/app-release.apk
